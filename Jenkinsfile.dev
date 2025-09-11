@@ -2,38 +2,51 @@ pipeline {
     agent any
 
     environment {
-        ECR_REPO = '844605843941.dkr.ecr.ap-south-1.amazonaws.com/node-test-app'
-        AWS_REGION = 'ap-south-1'
-        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        AWS_REGION = "ap-south-1"
+        AWS_ACCOUNT_ID = "844605843941"
+        ECR_REPO = "node-test-app"
+        IMAGE_TAG = "dev-${BUILD_NUMBER}"
     }
 
     stages {
         stage('Checkout') {
-            steps {
-                git branch: 'main', url: 'https://github.com/Sayali-189/node-test-app1.git'
-            }
-        }
-
-        stage('Build & Push Docker Image') {
-            steps {
-                sh """
-                docker build -t ${ECR_REPO}:${IMAGE_TAG} .
-                aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO}
-                docker push ${ECR_REPO}:${IMAGE_TAG}
-                """
-            }
-        }
-
-        stage('Deploy to Dev') {
-            steps {
-                echo "Deploying ${IMAGE_TAG} to Dev environment"
-                // Add your Dev deployment commands here
-            }
-        }
+    steps {
+        git branch: 'main',
+            url: 'https://github.com/Sayali-189/node-test-app1.git',
+            credentialsId: 'github-token'
     }
+}
 
-    post {
-        success { echo "Dev deployment completed successfully for image: ${IMAGE_TAG}" }
-        failure { echo "Dev deployment failed!" }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    sh """
+                    docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG .
+                    """
+                }
+            }
+        }
+
+        stage('Login to ECR') {
+            steps {
+                script {
+                    sh """
+                    aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+                    """
+                }
+            }
+        }
+
+        stage('Push to ECR') {
+            steps {
+                script {
+                    sh """
+                    docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
+                    """
+                }
+            }
+        }
     }
 }
