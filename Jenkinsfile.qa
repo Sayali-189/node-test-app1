@@ -1,0 +1,37 @@
+pipeline {
+    agent any
+
+    environment {
+        ECR_REPO = '844605843941.dkr.ecr.ap-south-1.amazonaws.com/node-test-app'
+        AWS_REGION = 'ap-south-1'
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Sayali-189/node-test-app1.git'
+            }
+        }
+
+        stage('Build & Push Docker Image') {
+            steps {
+                sh """
+                docker build -t ${ECR_REPO}:${IMAGE_TAG} .
+                aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO}
+                docker push ${ECR_REPO}:${IMAGE_TAG}
+                """
+            }
+        }
+
+        stage('Deploy to QA') {
+            steps {
+                echo "Deploying ${IMAGE_TAG} to QA environment"
+                // Add your QA deployment commands here
+            }
+        }
+    }
+
+    post {
+        success { echo "QA deployment completed successfully for image: ${IMAGE_TAG}" }
+        failure
