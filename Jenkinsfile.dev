@@ -10,21 +10,21 @@ pipeline {
 
     stages {
         stage('Checkout') {
-    steps {
-        git branch: 'main',
-            url: 'https://github.com/Sayali-189/node-test-app1.git',
-            credentialsId: 'github-token'
-    }
-}
-
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/Sayali-189/node-test-app1.git',
+                    credentialsId: 'github-token'  // Make sure this is your Jenkins PAT credential
+            }
         }
 
         stage('Build Docker Image') {
             steps {
-                script {
-                    sh """
-                    docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG .
-                    """
+                dir("${WORKSPACE}") {
+                    script {
+                        sh """
+                        docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG .
+                        """
+                    }
                 }
             }
         }
@@ -47,6 +47,12 @@ pipeline {
                     """
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            cleanWs() // cleans workspace after build
         }
     }
 }
