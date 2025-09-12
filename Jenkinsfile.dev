@@ -13,7 +13,7 @@ pipeline {
             steps {
                 git branch: 'main',
                     url: 'https://github.com/Sayali-189/node-test-app1.git',
-                    credentialsId: 'github-token'  // Make sure this is your Jenkins PAT credential
+                    credentialsId: 'github-token'
             }
         }
 
@@ -22,7 +22,7 @@ pipeline {
                 dir("${WORKSPACE}") {
                     script {
                         sh """
-                        docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG .
+                        docker build -t ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG} .
                         """
                     }
                 }
@@ -33,7 +33,7 @@ pipeline {
             steps {
                 script {
                     sh """
-                    aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
                     """
                 }
             }
@@ -43,7 +43,7 @@ pipeline {
             steps {
                 script {
                     sh """
-                    docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
+                    docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}
                     """
                 }
             }
@@ -52,7 +52,7 @@ pipeline {
 
     post {
         always {
-            cleanWs() // cleans workspace after build
+            cleanWs()
         }
     }
 }
