@@ -7,7 +7,7 @@ metadata:
     app: nodejs-demo-app
     environment: development
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: nodejs-demo-app
@@ -59,4 +59,4 @@ spec:
   - port: 80
     targetPort: 3000
     protocol: TCP
-  type: LoadBalancer
+  type: NodePort
