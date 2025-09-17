@@ -55,23 +55,6 @@ pipeline {
             }
         }
 
-        stage('Ensure ECR Repo Exists') {
-            steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding', 
-                    credentialsId: 'aws-cred-id'
-                ]]) {
-                    sh """
-                    # Create ECR repo if it doesn't exist
-                    if ! aws ecr describe-repositories --repository-names ${ECR_REPO_NAME} --region ${AWS_REGION} >/dev/null 2>&1; then
-                        aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION}
-                        sleep 10
-                    fi
-                    """
-                }
-            }
-        }
-
         stage('Push to ECR') {
             steps {
                 withCredentials([[
