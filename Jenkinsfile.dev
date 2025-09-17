@@ -10,13 +10,11 @@ pipeline {
         VERSION = 'currentBuild.number'
     }
 	 stages {
-        stage('Checkout Code') {
+       stage('Checkout Code') {
             steps {
-                withCredentials([string(credentialsId: 'Personal access tokens', variable: 'GITHUB_TOKEN')]) {
-                    git branch: 'main',
-                        credentialsId: 'Personal access tokens',
-                        url: 'https://github.com/Sayali-189/node-test-app1.git'
-                }
+                git branch: 'main',
+                    credentialsId: 'Personal access tokens',
+                    url: 'https://github.com/Sayali-189/node-test-app1.git'
             }
         }
         stage('Build Docker Image'){
