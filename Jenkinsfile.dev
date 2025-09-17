@@ -39,7 +39,7 @@ pipeline {
                         sh "docker rmi -f ${ECR_REPO}:${PROJECT_NAME}-${VERSION} | true"
             }
         }
-        stage('Deploy to Dev')
+        stage('Deploy to Dev'){
                      steps {
                             withKubeCredentials(kubectlCredentials: [[caCertificate: '', clusterName: 'EDF-DEV-5', contextName: '', credentialsId: 'SECRET_TOKEN', namespace: 'pp-app-dev', serverUrl: 'https://C4C1740D02111A86C35A3DD698BB9A5C.gr7.ap-south-1.eks.amazonaws.com']]) {
 								sh "cat node-test-app1/dev-deployment.yml | sed s/{{BUILD_NUMBER}}/${VERSION}/g | kubectl apply -f -"
@@ -48,5 +48,6 @@ pipeline {
                     }
                 }
             }
+         }
         
     
