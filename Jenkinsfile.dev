@@ -1,16 +1,14 @@
 pipeline {
-    agent any
-
-    environment {
-        AWS_REGION = 'ap-south-1'
-        ECR_REPO_NAME = 'pp-hello-service'
-        IMAGE_TAG = "${env.BUILD_NUMBER}"
-        EKS_CLUSTER_NAME = 'EDF-DEV-5'
-        K8S_NAMESPACE = 'pp-app-dev'
-        K8S_CONTEXT = 'pp-app-dev-context'
+	agent {
+		label 'master'
     }
-
-    stages {
+	
+	environment {
+        PROJECT_NAME = 'node-test-app1'
+        ECR_REPO = '181310995938.dkr.ecr.ap-south-1.amazonaws.com/pp-app-dev/pp-hello-service'
+        VERSION = 'currentBuild.number'
+    }
+	 stages {
         stage('Checkout Code') {
             steps {
                 withCredentials([string(credentialsId: 'github-pat', variable: 'GITHUB_TOKEN')]) {
@@ -20,107 +18,38 @@ pipeline {
                 }
             }
         }
-
-        stage('Configure AWS and EKS') {
-            steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding', 
-                    credentialsId: 'aws-cred-id',
-                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                ]]) {
-                    script {
-                        // Get AWS Account ID dynamically
-                        env.AWS_ACCOUNT_ID = sh(
-                            script: 'aws sts get-caller-identity --query Account --output text',
-                            returnStdout: true
-                        ).trim()
-                        
-                        env.ECR_REPO = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
-                        
-                        // Configure EKS access with your specific context
-                        sh """
-                        aws eks update-kubeconfig \
-                            --region ${AWS_REGION} \
-                            --name ${EKS_CLUSTER_NAME}
-                        """
+        stage('Build Docker Image'){
+            steps{
+                sh "docker build -t  ${ECR_REPO}:${PROJECT_NAME}-${VERSION} ."
+            }
+        }
+        stage('Push Docker Image'){ 
+            steps{
+                script{
+                    docker.withRegistry('http://'181310995938.dkr.ecr.ap-south-1.amazonaws.com', 'ecr:ap-south-1:aws-cred-id') {
+					sh "docker push ${ECR_REPO}:${PROJECT_NAME}-${VERSION}"
                     }
                 }
             }
         }
-
-        stage('Build Docker Image') {
-            steps {
-                sh 'docker build -t ${ECR_REPO}:${IMAGE_TAG} -t ${ECR_REPO}:latest .'
+        stage('Deleting local docker image'){    
+                    steps{
+                        //  make sure that the Docker image is removed
+                        sh "docker rmi -f ${ECR_REPO}:${PROJECT_NAME}-${VERSION} | true"
             }
         }
-
-        stage('Push to ECR') {
-            steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding', 
-                    credentialsId: 'aws-cred-id'
-                ]]) {
-                    sh """
-                    aws ecr get-login-password --region ${AWS_REGION} | \
-                        docker login --username AWS --password-stdin ${env.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-                    
-                    docker push ${ECR_REPO}:${IMAGE_TAG}
-                    docker push ${ECR_REPO}:latest
-                    """
+        stage('Deploy to Dev') {
+			
+                            withKubeCredentials(kubectlCredentials: [[caCertificate: '', clusterName: 'EDF-DEV-5', contextName: '', credentialsId: 'SECRET_TOKEN', namespace: 'pp-app-dev', serverUrl: 'https://C4C1740D02111A86C35A3DD698BB9A5C.gr7.ap-south-1.eks.amazonaws.com']]) {
+								sh "cat node-test-app1/dev-deployment.yml | sed s/{{BUILD_NUMBER}}/${VERSION}/g | kubectl apply -f -"
+								sh "cat node-test-app1/dev-autoscaling.yml | kubectl apply -f -"
+                            }
+                        
+                        catch (Exception e) {
+						echo "Request timeout! Build Aborted"
+                        }
+                    }
                 }
             }
         }
-
-        stage('Deploy to EKS') {
-            steps {
-                script {
-                    // Update deployment manifest with new image
-                    sh """
-                    sed -i.bak 's|image: .*|image: ${ECR_REPO}:${IMAGE_TAG}|g' k8s/deploy.yaml
-                    """
-                    
-                    // Apply deployment using your specific context and namespace
-                    sh """
-                    kubectl --context=${K8S_CONTEXT} apply -f k8s/deploy.yaml -n ${K8S_NAMESPACE}
-                    """
-                }
-            }
-        }
-
-        stage('Verify Deployment') {
-            steps {
-                script {
-                    // Wait for rollout to complete using your context
-                    sh """
-                    kubectl --context=${K8S_CONTEXT} rollout status deployment/nodejs-demo-app -n ${K8S_NAMESPACE} --timeout=300s
-                    """
-                    
-                    // Verify pods are running
-                    sh """
-                    kubectl --context=${K8S_CONTEXT} get pods -n ${K8S_NAMESPACE} -l app=nodejs-demo-app
-                    """
-                    
-                    // Get service details
-                    sh """
-                    kubectl --context=${K8S_CONTEXT} get svc -n ${K8S_NAMESPACE}
-                    """
-                }
-            }
-        }
-    }
-
-    post {
-        success {
-            echo "✅ Pipeline completed successfully! Node.js app deployed to EKS namespace: ${K8S_NAMESPACE}"
-            echo "Image: ${ECR_REPO}:${IMAGE_TAG}"
-            echo "Context: ${K8S_CONTEXT}"
-        }
-        failure {
-            echo "❌ Pipeline failed. Check logs for details."
-        }
-        always {
-            echo "Cleaning up workspace..."
-        }
-    }
-}
+    
