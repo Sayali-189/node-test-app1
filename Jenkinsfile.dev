@@ -2,38 +2,71 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION = "ap-south-1"
-        AWS_ACCOUNT_ID = "844605843941"
-        ECR_REPO = "node-test-app"
-        IMAGE_TAG = "dev-${BUILD_NUMBER}"
+        AWS_REGION = 'ap-south-1'
+        ECR_REPO_NAME = 'pp-hello-service'
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        EKS_CLUSTER_NAME = 'EDF-DEV-5'
+        K8S_NAMESPACE = 'pp-app-dev'
+        K8S_CONTEXT = 'pp-app-dev-context'
     }
 
     stages {
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
-                git branch: 'main',
-                    url: 'https://github.com/Sayali-189/node-test-app1.git',
-                    credentialsId: 'github-token'
+                withCredentials([string(credentialsId: 'github-pat', variable: 'GITHUB_TOKEN')]) {
+                    git branch: 'main',
+                        credentialsId: 'github-pat',
+                        url: 'https://github.com/Sayali-189/node-test-app1.git'
+                }
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Configure AWS and EKS') {
             steps {
-                dir("${WORKSPACE}") {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding', 
+                    credentialsId: 'aws-cred-id',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
                     script {
+                        // Get AWS Account ID dynamically
+                        env.AWS_ACCOUNT_ID = sh(
+                            script: 'aws sts get-caller-identity --query Account --output text',
+                            returnStdout: true
+                        ).trim()
+                        
+                        env.ECR_REPO = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
+                        
+                        // Configure EKS access with your specific context
                         sh """
-                        docker build -t ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG} .
+                        aws eks update-kubeconfig \
+                            --region ${AWS_REGION} \
+                            --name ${EKS_CLUSTER_NAME}
                         """
                     }
                 }
             }
         }
 
-        stage('Login to ECR') {
+        stage('Build Docker Image') {
             steps {
-                script {
+                sh 'docker build -t ${ECR_REPO}:${IMAGE_TAG} -t ${ECR_REPO}:latest .'
+            }
+        }
+
+        stage('Ensure ECR Repo Exists') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding', 
+                    credentialsId: 'aws-cred-id'
+                ]]) {
                     sh """
-                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                    # Create ECR repo if it doesn't exist
+                    if ! aws ecr describe-repositories --repository-names ${ECR_REPO_NAME} --region ${AWS_REGION} >/dev/null 2>&1; then
+                        aws ecr create-repository --repository-name ${ECR_REPO_NAME} --region ${AWS_REGION}
+                        sleep 10
+                    fi
                     """
                 }
             }
@@ -41,9 +74,53 @@ pipeline {
 
         stage('Push to ECR') {
             steps {
-                script {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding', 
+                    credentialsId: 'aws-cred-id'
+                ]]) {
                     sh """
-                    docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}
+                    aws ecr get-login-password --region ${AWS_REGION} | \
+                        docker login --username AWS --password-stdin ${env.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                    
+                    docker push ${ECR_REPO}:${IMAGE_TAG}
+                    docker push ${ECR_REPO}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                script {
+                    // Update deployment manifest with new image
+                    sh """
+                    sed -i.bak 's|image: .*|image: ${ECR_REPO}:${IMAGE_TAG}|g' k8s/deploy.yaml
+                    """
+                    
+                    // Apply deployment using your specific context and namespace
+                    sh """
+                    kubectl --context=${K8S_CONTEXT} apply -f k8s/deploy.yaml -n ${K8S_NAMESPACE}
+                    """
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                script {
+                    // Wait for rollout to complete using your context
+                    sh """
+                    kubectl --context=${K8S_CONTEXT} rollout status deployment/nodejs-demo-app -n ${K8S_NAMESPACE} --timeout=300s
+                    """
+                    
+                    // Verify pods are running
+                    sh """
+                    kubectl --context=${K8S_CONTEXT} get pods -n ${K8S_NAMESPACE} -l app=nodejs-demo-app
+                    """
+                    
+                    // Get service details
+                    sh """
+                    kubectl --context=${K8S_CONTEXT} get svc -n ${K8S_NAMESPACE}
                     """
                 }
             }
@@ -51,8 +128,16 @@ pipeline {
     }
 
     post {
+        success {
+            echo "✅ Pipeline completed successfully! Node.js app deployed to EKS namespace: ${K8S_NAMESPACE}"
+            echo "Image: ${ECR_REPO}:${IMAGE_TAG}"
+            echo "Context: ${K8S_CONTEXT}"
+        }
+        failure {
+            echo "❌ Pipeline failed. Check logs for details."
+        }
         always {
-            cleanWs()
+            echo "Cleaning up workspace..."
         }
     }
 }
