@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: node-test-app1
-  namespace:pp-app-dev 
+  namespace: pp-app-dev 
   labels:
     app: node-test-app1
     environment: development
