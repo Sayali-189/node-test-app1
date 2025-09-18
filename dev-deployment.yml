@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: node-test-app1
-        image: 181310995938.dkr.ecr.ap-south-1.amazonaws.com/node-test-app1:node-test-app1-{{BUILD_NUMBER}}  
+        image:  181310995938.dkr.ecr.ap-south-1.amazonaws.com/pp-app-dev/pp-hello-service:node-test-app1-{{BUILD_NUMBER}} 
         ports:
         - containerPort: 3000  
         env:
