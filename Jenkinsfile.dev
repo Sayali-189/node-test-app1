@@ -25,7 +25,7 @@ pipeline {
         stage('Push Docker Image'){ 
             steps{
                 script{
-                    docker.withRegistry('http://181310995938.dkr.ecr.ap-south-1.amazonaws.com', 'ecr:ap-south-1:aws-cred-id') {
+                    docker.withRegistry('https://181310995938.dkr.ecr.ap-south-1.amazonaws.com', 'ecr:ap-south-1:aws-cred-id') {
 					sh "docker push ${ECR_REPO}:${PROJECT_NAME}-${VERSION}"
                     }
                 }
