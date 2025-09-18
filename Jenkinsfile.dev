@@ -7,7 +7,6 @@ pipeline {
 	environment {
         PROJECT_NAME = 'node-test-app1'
         ECR_REPO = '181310995938.dkr.ecr.ap-south-1.amazonaws.com/pp-app-dev/pp-hello-service'
-         IMAGE_TAG = "${BUILD_NUMBER}"
     }
 	 stages {
        stage('Checkout Code') {
@@ -18,8 +17,11 @@ pipeline {
             }
         }
         stage('Build Docker Image'){
-            steps{
-                sh "docker build -t  ${ECR_REPO}:${PROJECT_NAME}-${VERSION} ."
+            steps {
+                script {
+                    env.VERSION = "${BUILD_NUMBER}"   
+                    sh "docker build -t ${ECR_REPO}:${PROJECT_NAME}-${VERSION} ."
+                }
             }
         }
         stage('Push Docker Image'){ 
