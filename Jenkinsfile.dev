@@ -41,7 +41,7 @@ pipeline {
                      steps {
                             withKubeCredentials(kubectlCredentials: [[caCertificate: '', clusterName: 'EDF-DEV-5', contextName: 'pp-app-dev-context', credentialsId: 'SECRET_TOKEN', namespace: 'pp-app-dev', serverUrl: 'https://C4C1740D02111A86C35A3DD698BB9A5C.gr7.ap-south-1.eks.amazonaws.com']]) {
 								sh "cat dev-deployment.yml | sed s/{{BUILD_NUMBER}}/${VERSION}/g | kubectl apply -f -"
-								sh "cat autoscaling.yml | kubectl apply -f -"
+								sh "cat dev-autoscaling.yml | kubectl apply -f -"
                             }
                     }
                 }
