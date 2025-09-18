@@ -22,15 +22,19 @@ pipeline {
                 sh "docker build -t  ${ECR_REPO}:${PROJECT_NAME}-${VERSION} ."
             }
         }
-        stage('Push Docker Image'){ 
-            steps{
-                script{
-                    docker.withRegistry('http://181310995938.dkr.ecr.ap-south-1.amazonaws.com', 'ecr:ap-south-1:aws-cred-id') {
-					sh "docker push ${ECR_REPO}:${PROJECT_NAME}-${VERSION}"
-                    }
-                }
+        stage('Push Docker Image') {
+    steps {
+        script {
+            // Tag the image first
+            sh "docker tag ${PROJECT_NAME}:${VERSION} ${ECR_REPO}:${PROJECT_NAME}-${VERSION}"
+            
+            // Push to ECR 
+            docker.withRegistry('http://181310995938.dkr.ecr.ap-south-1.amazonaws.com', 'ecr:ap-south-1:aws-cred-id') {
+                sh "docker push ${ECR_REPO}:${PROJECT_NAME}-${VERSION}"
             }
         }
+    }
+}
         stage('Deleting local docker image'){    
                     steps{
                         //  make sure that the Docker image is removed
