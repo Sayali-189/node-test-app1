@@ -7,7 +7,7 @@ pipeline {
 	environment {
         PROJECT_NAME = 'node-test-app1'
         ECR_REPO = '181310995938.dkr.ecr.ap-south-1.amazonaws.com/pp-app-dev/pp-hello-service'
-        VERSION = 'currentBuild.number'
+         IMAGE_TAG = "${BUILD_NUMBER}"
     }
 	 stages {
        stage('Checkout Code') {
