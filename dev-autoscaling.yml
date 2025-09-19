@@ -2,13 +2,14 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: node-test-app1-hpa
+  namespace: pp-app-dev   
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: node-test-app1
-  minReplicas: 1
-  maxReplicas: 3
+  minReplicas: 2           
+  maxReplicas: 5          
   metrics:
   - type: Resource
     resource:
