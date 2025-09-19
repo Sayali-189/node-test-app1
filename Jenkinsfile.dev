@@ -1,53 +1,68 @@
-
 pipeline {
-	agent {
-		label 'master'
+    agent {
+        label 'master'
     }
-	
-	environment {
+
+    environment {
         PROJECT_NAME = 'node-test-app1'
         ECR_REPO = '181310995938.dkr.ecr.ap-south-1.amazonaws.com/pp-app-dev/pp-hello-service'
     }
-	 stages {
-       stage('Checkout Code') {
+
+    stages {
+        stage('Checkout Code') {
             steps {
                 git branch: 'main',
                     credentialsId: 'Personal access tokens',
                     url: 'https://github.com/Sayali-189/node-test-app1.git'
             }
         }
-        stage('Build Docker Image'){
+
+        stage('SonarQube Analysis') {
+            steps {
+                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_LOGIN')]) {
+                    sh """
+                    docker run --rm \
+                      -e SONAR_HOST_URL="http://13.233.200.55:9000" \
+                      -e SONAR_LOGIN="$SONAR_LOGIN" \
+                      -v "$WORKSPACE:/usr/src" \
+                      sonarsource/sonar-scanner-cli
+                    """
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
             steps {
                 script {
-                    env.VERSION = "${BUILD_NUMBER}"   
+                    env.VERSION = "${BUILD_NUMBER}"
                     sh "docker build -t ${ECR_REPO}:${PROJECT_NAME}-${VERSION} ."
                 }
             }
         }
-        stage('Push Docker Image'){ 
-            steps{
-                script{
+
+        stage('Push Docker Image') {
+            steps {
+                script {
                     docker.withRegistry('https://181310995938.dkr.ecr.ap-south-1.amazonaws.com', 'ecr:ap-south-1:aws-cred-id') {
-					sh "docker push ${ECR_REPO}:${PROJECT_NAME}-${VERSION}"
+                        sh "docker push ${ECR_REPO}:${PROJECT_NAME}-${VERSION}"
                     }
                 }
             }
         }
-        stage('Deleting local docker image'){    
-                    steps{
-                        //  make sure that the Docker image is removed
-                        sh "docker rmi -f ${ECR_REPO}:${PROJECT_NAME}-${VERSION} | true"
+
+        stage('Deleting local docker image') {
+            steps {
+                sh "docker rmi -f ${ECR_REPO}:${PROJECT_NAME}-${VERSION} | true"
             }
         }
-        stage('Deploy to Dev'){
-                     steps {
-                            withKubeCredentials(kubectlCredentials: [[caCertificate: '', clusterName: 'EDF-DEV-5', contextName: 'pp-app-dev-context', credentialsId: 'SECRET_TOKEN', namespace: 'pp-app-dev', serverUrl: 'https://C4C1740D02111A86C35A3DD698BB9A5C.gr7.ap-south-1.eks.amazonaws.com']]) {
-								sh "cat dev-deployment.yml | sed s/{{BUILD_NUMBER}}/${VERSION}/g | kubectl apply -f -"
-								sh "cat dev-autoscaling.yml | kubectl apply -f -"
-                            }
-                    }
+
+        stage('Deploy to Dev') {
+            steps {
+                withKubeCredentials(kubectlCredentials: [[caCertificate: '', clusterName: 'EDF-DEV-5', contextName: 'pp-app-dev-context', credentialsId: 'SECRET_TOKEN', namespace: 'pp-app-dev', serverUrl: 'https://C4C1740D02111A86C35A3DD698BB9A5C.gr7.ap-south-1.eks.amazonaws.com']]) {
+                    sh "cat dev-deployment.yml | sed s/{{BUILD_NUMBER}}/${VERSION}/g | kubectl apply -f -"
+                    sh "cat dev-autoscaling.yml | kubectl apply -f -"
                 }
             }
-         }
-        
-    
+        }
+    }
+}
